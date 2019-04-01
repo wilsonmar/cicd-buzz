@@ -36,7 +36,7 @@ LOG_PREFIX=$(date +%Y-%m-%dT%H:%M:%S%z)-$((1 + RANDOM % 1000))
    # ISO-8601 date plus RANDOM=$((1 + RANDOM % 1000))  # 3 digit random number.
    #  LOGFILE="$0.$LOG_PREFIX.log"
 echo_f "STARTING $0 within $PWD "
-echo_g "starting at $LOG_PREFIX with $FREE_DISKBLOCKS_START blocks free ..."
+echo_f "starting at $LOG_PREFIX with $FREE_DISKBLOCKS_START blocks free ..."
 
 #########
 
@@ -67,6 +67,7 @@ sleep 1.5  # Wait seconds for start-up in background.
          # <html><body><h1>End-To-End Continuous Testing Remarkably Revamps Continuous Deployment</h1></body></html>
 
 CONTAINER_ID=$(docker ps -aqf "name=$NAME")
+# docker logs "${CONTAINER_ID}"
       echo_f "Stop running CONTAINER_ID=$CONTAINER_ID ... (takes a few seconds)"
       # See https://stackoverflow.com/questions/33117068/use-of-supervisor-in-docker/33119321#33119321
       docker stop "${CONTAINER_ID}" # > /dev/null 2>&1
@@ -87,6 +88,8 @@ echo_f "Docker Prune dangling ..."
 yes | docker system prune -a
    # Total reclaimed space: ...
    # See https://www.digitalocean.com/community/tutorials/how-to-remove-docker-images-containers-and-volumes
+
+#########
 
 FREE_DISKBLOCKS_END="$(df -P | awk '{print $4}' | sed -n 2p)"
 DIFF=$(((FREE_DISKBLOCKS_START-FREE_DISKBLOCKS_END)/2048))
