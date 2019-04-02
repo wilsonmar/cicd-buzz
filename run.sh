@@ -1,7 +1,9 @@
 #!/bin/bash
 # run.sh from https://github.com/wilsonmar/cicd-buzz
 # Explained at https://wilsonmar.github.io/cicd-pipeline
-# This first clean-up leftovers from previous run, then run Docker image,
+# This first checks if the port is already being used.
+# Then it clean-up leftover docker process from previous run.
+# Then run Docker image,
 # After running, the container process is removed.
 # The image downloaded is also removed to save disk space.
 # So the image is downloaded on every run.
@@ -9,7 +11,7 @@
 # Variables:
 NAME="cicd-buzz"
 IMAGE="robvanderleek/cicd-buzz"
-CONTAINER_PORT="8082"
+CONTAINER_PORT="8099"
 
 ### Set color variables (based on aws_code_deploy.sh): 
 blink="\e[5m"
@@ -39,6 +41,17 @@ echo_f "STARTING $0 within $PWD "
 echo_f "starting at $LOG_PREFIX with $FREE_DISKBLOCKS_START blocks free ..."
 
 #########
+
+# Verify that the port is available:
+   RESULT=$(grep -w $CONTAINER_PORT/tcp /etc/services)
+   if [[ -z "${RESULT// }" ]]; then  #it's blank
+      echo_f "Port $CONTAINER_PORT is available ..."
+   else
+      echo_f "Please specify another port than $CONTAINER_PORT ..."
+      echo "$RESULT"  # http             80/tcp     www www-http # World Wide Web HTTP
+      exit
+   fi
+
 
 docker image pull "${IMAGE}:latest"
 # List images downloaded:
