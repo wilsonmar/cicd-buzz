@@ -1,5 +1,7 @@
 #!/bin/bash
-# run.sh from https://github.com/wilsonmar/cicd-buzz
+# Run this from any directory:
+# sh -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/cicd-buzz/master/run.sh)"
+# or ./run.sh after cloning https://github.com/wilsonmar/cicd-buzz 
 # Explained at https://wilsonmar.github.io/cicd-pipeline
 # Tested on macOS Mojave 10.14
 # This first checks if the port is already being used.
@@ -7,12 +9,16 @@
 # Then run Docker image,
 # After running, the container process is removed.
 # The image downloaded is also removed to save disk space.
-# So the image is downloaded on every run.
+# So the image is downloaded on every run. Idempotent!
 
 #1 Define variables you may change:
 NAME="cicd-buzz"
 IMAGE="robvanderleek/cicd-buzz"
 CONTAINER_PORT="8099"
+
+REMOVE_DOCKER_IMAGE="1"
+DISPLAY_DOCKER_INFO="0"  # 0 for NO, 1 for YES for docker info
+PRUNE_DOCKER="0"
 
 #2 Set color variables (based on aws_code_deploy.sh): 
 blink="\e[5m"
@@ -57,23 +63,27 @@ echo_c "at $LOG_PREFIX with $FREE_DISKBLOCKS_START blocks free ..."
    fi
    # TODO: Reusable function docker_cleanup() :
 
-#6 Verify that the port is available:
+#6 Pull image from DockerHub:
+docker image pull "${IMAGE}:latest"
+if [ $? -eq 0 ]; then
+   #7 Get from local Docker the IMAGE_ID to the Docker image downloaded:
+   docker images "${IMAGE}"   # 61.8MB
+   IMAGE_ID=$(docker images --format="{{.Repository}} {{.ID}}" | grep "^$IMAGE " | cut -d' ' -f2)
+   echo "$IMAGE IMAGE_ID=$IMAGE_ID"
+else
+   echo_f "Error $? during docker run. Exiting script ..."
+   exit
+fi
+
+#8 Verify that the port is available:
    RESULT=$(grep -w $CONTAINER_PORT/tcp /etc/services)
    if [[ -z "${RESULT// }" ]]; then  #it's blank
       echo_f "Port $CONTAINER_PORT is available ..."
    else
-      echo_f "Please specify another port than $CONTAINER_PORT ..."
+      echo_f "Please specify another port than $CONTAINER_PORT. Exiting script ..."
       echo_c "$RESULT"  # http             80/tcp     www www-http # World Wide Web HTTP
       exit
    fi
-
-#7 Pull image from DockerHub:
-docker image pull "${IMAGE}:latest"
-
-#8 Get from local Docker the IMAGE_ID to the Docker image downloaded:
-docker images "${IMAGE}"   # 61.8MB
-IMAGE_ID=$(docker images --format="{{.Repository}} {{.ID}}" | grep "^$IMAGE " | cut -d' ' -f2)
-echo "$IMAGE IMAGE_ID=$IMAGE_ID"
 
 #9 Run:
 echo_f "Docker \"$NAME\" running in background for localhost:$CONTAINER_PORT ..."
@@ -94,11 +104,12 @@ fi
 
 #12 Invoke a response from the app and display response:
       RESPONSE=$(curl "localhost:$CONTAINER_PORT")
-      echo "RESPONSE=$RESPONSE"
+      echo_f "${#RESPONSE} characters in RESPONSE="
+      echo "$RESPONSE"
          # <html><body><h1>End-To-End Continuous Testing Remarkably Revamps Continuous Deployment</h1></body></html>
 #13 Twice, to see variation in the response:
-      RESPONSE=$(curl "localhost:$CONTAINER_PORT")
-      echo "RESPONSE=$RESPONSE"
+      echo_f "${#RESPONSE} characters in RESPONSE="
+      echo "$RESPONSE"
 
 #14 Stop the run
 CONTAINER_ID=$(docker ps -aqf "name=$NAME")
@@ -109,22 +120,31 @@ CONTAINER_ID=$(docker ps -aqf "name=$NAME")
       echo_f "Removing CONTAINER_ID=$CONTAINER_ID ..."
       docker rm   "${CONTAINER_ID}" # > /dev/null 2>&1
 
-#15 Dispose of image to save disk space:
-echo_f "Disposing image $NAME, IMAGE_ID=$IMAGE_ID ... (takes a few seconds)"
-docker rmi "$IMAGE_ID"
+#15 Remove image to save disk space:
+if [ $REMOVE_DOCKER_IMAGE -eq "1" ]; then
+   echo_f "Removing image $NAME, IMAGE_ID=$IMAGE_ID ... (takes a few seconds)"
+   docker rmi "$IMAGE_ID"
+fi
 
-# List all info:
-# docker info
+#16 List all info:
+if [ $DISPLAY_DOCKER_INFO -eq "1" ]; then
+   echo_f "Listing docker info ..."
+   docker info
+else
+   echo_f "docker info not listed by default ..."
+fi
 
-#16 Delete -all images, containers, volumes, and networks — that are dangling (not associated with a container):
-echo_f "Docker Prune dangling ..."
-yes | docker system prune -a
+#17 Delete -all images, containers, volumes, and networks — that are dangling (not associated with a container):
+if [ $PRUNE_DOCKER -eq "1" ]; then
+   echo_f "Docker Prune dangling ..."
+   yes | docker system prune -a
    # Total reclaimed space: ...
    # See https://www.digitalocean.com/community/tutorials/how-to-remove-docker-images-containers-and-volumes
+fi
 
 #########
 
-#17 Calculate and display end of run statistics:
+#18 Calculate and display end of run statistics:
 FREE_DISKBLOCKS_END="$(df -P | awk '{print $4}' | sed -n 2p)"
 DIFF=$(((FREE_DISKBLOCKS_START-FREE_DISKBLOCKS_END)/2048))
 # 380691344 / 182G = 2091710.681318681318681 blocks per GB
